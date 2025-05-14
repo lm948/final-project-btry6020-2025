@@ -1,0 +1,246 @@
+---
+title: "BTRY6020 final project analysis"
+author: "Lyle Massoia"
+date: "5/14/2025"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Introduction: 
+
+Critics of the league say that NBA players are shooting 3-point shots more often than they used to. How has the average number of 3pters per game (x3pa_per_game) changed over time and what factors influenced this variation? Let's examine the effect of season, 3pt success rate (x3p_percent), 2pt-field goal success rate (x2p_percent), opponent's average number of 3pters per game (opp_x3pa_per_game), opponent's defensive rebound percentage (opp_drb_per_game), and opponent's avg blocks per game (opp_blk_per_game). 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exploratory data analysis:
+
+### Importing the dataset, data cleaning
+```{r}
+library(readr)
+NBA_team_pg_data <- read_csv('/Users/lylemassoia/Documents/PhD/BTRY 6020/Final exam/NBA dataset/Team Stats Per Game2.csv')
+```
+
+**Data cleaning**
+```{r}
+library(dplyr)
+#restricting the data frame to the 2014-2024 seasons and making new data frame for it
+NBA_team_pg_data1424 <- NBA_team_pg_data %>% filter(season >= 2014, season <=2024)
+
+#making season a categorical variable 
+is.factor(NBA_team_pg_data1424$season)
+NBA_team_pg_data1424$season <- as.factor(NBA_team_pg_data1424$season)
+
+#are there any missing values?
+sum(is.na(NBA_team_pg_data1424)) #there are 11 missing values
+
+#removal of missing values? there are some rows that have "league average," which have missing values 
+NBA_team_pg_data1424 <- NBA_team_pg_data1424 %>% filter(team != "League Average") 
+sum(is.na(NBA_team_pg_data1424)) #that took care of all the missing values!
+```
+
+### Outliers - check for outliers in our numerical predictor variables
+```{r}
+par(mfrow = c(2,2))
+boxplot(NBA_team_pg_data1424$x3p_percent,ylab="3-point percent per game") # 3 outliers here 
+boxplot(NBA_team_pg_data1424$x2p_percent,ylab="2-point percent per game") #no outliers
+boxplot(NBA_team_pg_data1424$opp_x3pa_per_game,ylab="Opponent's 3-point attempts per game") #no outliers
+boxplot(NBA_team_pg_data1424$opp_drb_per_game, ylab="Opponent's average defensive rebounds per game") #1 outlier 
+boxplot(NBA_team_pg_data1424$opp_blk_per_game, ylab="Opponent's average number of blocks per game") #2 outliers
+```
+
+
+### Data visualizations
+```{r}
+library(ggplot2)
+library(gridExtra)
+
+vis1 <- ggplot(NBA_team_pg_data1424,aes(x=season, y=x3pa_per_game)) + geom_point(color="black") + theme_minimal() + theme(panel.grid = element_blank()) + labs(title="3-point attempts across 2014-2024 seasons", x="Season",y="Average 3-point attempts per game") + theme(axis.text.x = element_text(angle = 45, hjust=1, size=6)) + theme(title = element_text(hjust=0.5, size=6))
+                                                                                                                        
+vis2 <- ggplot(NBA_team_pg_data1424,aes(x=opp_x3pa_per_game, y=x3pa_per_game)) + geom_point(color="black") + theme_minimal() + theme(panel.grid = element_blank()) + labs(title="Effect of opp 3-pt attempts on a team's 3-pt attempts", x="Opp's avg 3-pt attemps per game",y="Team's avg 3-pt attempts per game") + theme(title = element_text(hjust=0.5, size=6))
+
+vis3 <- ggplot(NBA_team_pg_data1424,aes(x=opp_blk_per_game, y=x3pa_per_game)) + geom_point(color="black") + theme_minimal() +  theme(panel.grid = element_blank()) + labs(title="Effect of opp blocks on a team's 3-pt attempts", x="Opp's avg blocks per game",y="Team's avg 3-pt attempts per game") + theme(title =element_text(hjust=0.5, size=6)) 
+
+vis4 <- ggplot(NBA_team_pg_data1424,aes(x=opp_drb_per_game, y=x3pa_per_game)) + geom_point(color="black") + theme_minimal() + theme(panel.grid = element_blank()) + labs(title="Effect of opp defensive rebounds on a team's 3-pt attempts", x="Opp's avg defensive rebounds per game",y="Team's avg 3-pt attempts per game") + theme(title = element_text(hjust=0.5, size=6))
+
+vis5 <- ggplot(NBA_team_pg_data1424,aes(x=x2p_percent, y=x3pa_per_game)) + geom_point(color="black") + theme_minimal() + theme(panel.grid = element_blank()) + labs(title="Effect of 2-pt percentage on a team's 3-pt attempts", x="2-point percentage",y="Team's avg 3-pt attempts per game") + theme(title = element_text(hjust=0.5, size=6))
+
+vis6 <- ggplot(NBA_team_pg_data1424,aes(x=x3p_percent, y=x3pa_per_game)) + geom_point(color="black") + theme_minimal() + theme(panel.grid = element_blank()) + labs(title="Effect of 3-point success rate on a team's avg 3-pt attempts", x="Team's 3-pt success rate",y="Team's avg 3-pt attempts per game") + theme(title = element_text(hjust=0.5, size=6))
+
+grid.arrange(vis1, vis2, vis3, vis4, vis5, vis6, nrow=3, ncol=2)
+```
+
+
+## Regression assumptions verification
+
+The assumptions for regression are: 
+
+  * Linearity
+  * Normality of residuals
+  * Homoscedasticity (constant variance of residuals)
+  * Independence of observations 
+  * Multicollinearity assessment 
+
+
+```{r}
+#need to make the model first 
+x3pa.over.time.full.lm <- lm(x3pa_per_game ~ season + x2p_percent + x3p_percent + opp_x3pa_per_game + opp_blk_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+summary(x3pa.over.time.full.lm)
+
+library(car)
+vif(x3pa.over.time.full.lm) #based on the values from this code it appears there is moderate multicollinearity with 2 predictors
+par(mfrow=c(2,2))
+plot(x3pa.over.time.full.lm)
+durbinWatsonTest(x3pa.over.time.full.lm) #no autocorrelation, p>0.05
+```
+
+Results from diagnostic plots: 
+
+  * Based on the residuals vs. fitted plot, the assumption of linearity is met - points are mostly equally distributed around the horizontal line. 
+  * Based on the Q-Q plot residuals plot, the residuals do look *approximately* normal - there is some deviation but not egregious. 
+  * Based on the Durbin-Watson test, the assumption of independence of observations is met (p>0.05).  
+  * Based on the scale-location plot, the assumption of homoscedasticity is met. Points appear to be mostly evenly spread. 
+  * Based on the Variance Inflation Factor output, there is a moderate-high level of multicollinearity with the variable "opp_x3pa_per_game" and a mild-moderate level of multicollinearity with "x2p_percent." 
+  
+  
+##Assumption violation handling - the only assumption being violated is multicollinearity
+
+We should explore removing these variables. Our research question is "Some people say that the NBA has become too reliant on 3-point shots. How has the average number of 3pters per game (x3pa) changed over time and what factors influenced this variation?" So, the number of 3-point shots a team's opponent is attempting might be serving as a sort of proxy for how the 3-point shot trends over time in the league. If we are assuming that the number of 3-point shot attempts increased across the league, it's reasonable to assume it increases for both a team *and* their opponent, rendering the "opp_x3pa_per_game" predictor redundant. However, the success rate of 2-point shots might be relevant. I will also do backward selection using BIC and then LASSO to see if those reduced models are any better. 
+
+```{r}
+#first remove x2p_percent and keep opp_x3pa_per_game and then run VIF
+lm.no.x2p <- lm(x3pa_per_game ~ season + x3p_percent + opp_x3pa_per_game + opp_blk_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+vif(lm.no.x2p)
+
+#now remove opp_x3pa_per_game and keep x2p_percent and then run VIF
+lm.no.oppx3p <- lm(x3pa_per_game ~ season + x2p_percent + x3p_percent + opp_blk_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+vif(lm.no.oppx3p) 
+```
+When "opp_x3pa_per_game" and "x2p_percent" are removed from the model, the VIF values improve for other predictors. 
+
+```{r}
+#checking diagnostic plots again for each reduced model
+par(mfrow=c(2,2))
+plot(lm.no.x2p)
+plot(lm.no.oppx3p) 
+```
+Not much has changed with the diagnostic plots. The next step will be to do backward selection and LASSO regularization on the full model to see if any predictors get eliminated that way.  
+
+###Variable selection
+In order to decide how to proceed with variable selection, it is important to think about the purpose of this model: understanding or predicting? For this particular question, we are interested in *understanding* the factors that may have influenced a change in the number of 3-point shots attempted per game over a 10-year period in the league. Using $R^2$ would not be a good idea since it increases as you add predictors to a model.   
+
+I think BIC would be a good choice here and I will use backwards selection because I already have a full model created and I am looking to check that, rather than build a model starting from the intercept. Because I still am not sure which variable to remove from before, I will run backward selection using BIC for both. 
+
+```{r}
+#backward BIC from full original model 
+backward.bic.full.og.lm <- step(object=x3pa.over.time.full.lm, direction="backward", k=log(nrow(NBA_team_pg_data1424)))
+summary(backward.bic.full.og.lm) #ends at 808.91
+```
+
+The lowest BIC (which is what we want) came from the full model being reduced to **x3pa_per_game ~ season + x2p_percent + opp_x3pa_per_game + opp_drb_per_game** - I put season back in since I want to investigate the trends over time. 
+
+```{r}
+#making this into a model for comparison later
+BIC.reduced.from.og.lm <- lm(x3pa_per_game ~ season + x2p_percent + opp_x3pa_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+```
+
+
+For another variable selection technique, we can try a Lasso procedure because it shrinks coefficients to zero which effectively acts as variable selection. I will run this using the full original model to see if it has any insight with which variable to drop. 
+
+```{r}
+library(glmnet)
+#matrix for lasso, full original model
+x <- model.matrix(x3pa_per_game ~ season + x2p_percent + x3p_percent + opp_x3pa_per_game + opp_blk_per_game + opp_drb_per_game, data=NBA_team_pg_data1424) [, -1]
+y <- NBA_team_pg_data1424$x3pa_per_game
+#run lasso 
+full.og.lasso.glm <- glmnet::cv.glmnet(x,y, alpha=1)
+plot(full.og.lasso.glm, xvar="lamba", label=TRUE)
+
+coef(full.og.lasso.glm, s=full.og.lasso.glm$lambda.1se)
+```
+ 
+
+From running Lasso, we can see based on the output that it thought none of the seasons were relevant other than 2021-2022 season (we will ignore this since, again, I want to explore changes over time) and opp_blk_per_game was dropped. The variables that have coefficients closer to 0 have less impact. 
+
+```{r}
+#create a model for comparison later
+red.lasso.on.og.full.model <- lm(x3pa_per_game ~ season + x2p_percent + x3p_percent + opp_x3pa_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+```
+
+
+Checking diagnostic plots for the reduced models created by BIC and by LASSO, diagnostic plots still look good & relatively the same between the two models 
+```{r}
+par(mfrow=c(2,2))
+plot(BIC.reduced.from.og.lm)
+plot(red.lasso.on.og.full.model)
+```
+
+##Assess model with performance metrics: 
+
+###Validate your model using appropriate cross-validation techniques 
+Using K-Fold cross validation because it is not as much work computationally and will still give a good bias-variance balance. I will do cross-validation on both of these models to check which has a lower prediction error. 
+```{r}
+library(boot)
+
+#model that doing backward BIC variable selection gave from full model: 
+BIC.reduced.from.og.mod <- glm(formula = x3pa_per_game ~ season + x2p_percent + opp_x3pa_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+BIC.reduced.from.og.cv <- cv.glm(NBA_team_pg_data1424, BIC.reduced.from.og.mod, K=10)$delta[1]
+BIC.reduced.from.og.cv
+
+#model that doing lasso gave from full model: 
+red.lasso.on.og.full.model.mod <- glm(formula = x3pa_per_game ~ season + x2p_percent + x3p_percent + opp_x3pa_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+red.lasso.on.og.full.model.cv <- cv.glm(NBA_team_pg_data1424, red.lasso.on.og.full.model.mod, K=10)$delta[1]
+red.lasso.on.og.full.model.cv
+```
+
+The RMSE value given by cross-validation for the model from backward BIC variable selection and the RMSE for the model given by using Lasso were about the same. 
+
+Summary of each to check $R^2$ and adjusted $R^2$
+```{r}
+summary(BIC.reduced.from.og.lm)
+summary(red.lasso.on.og.full.model)
+```
+
+The $R^2$ and adjusted $R^2$ differ by less than 0.005.\
+It would appear that it doesn't matter much which model we use as the final, so my preference is the model that keeps the variable x3p_percent, because I think it would make sense that teams that make more 3s will shoot more 3s. This would be:\
+
+```{r}
+x3pa.over.time.final.lm <- lm(x3pa_per_game ~ season + x2p_percent + x3p_percent + opp_x3pa_per_game + opp_drb_per_game, data=NBA_team_pg_data1424)
+```
+
+
+##Perform hypothesis tests on coefficients 
+
+```{r}
+summary(x3pa.over.time.final.lm)
+```
+
+From the hypothesis test that the summary() provides, we can see that x2p_percent, x3p_percent, opp_drb_per_game, and all seasons except 2015 and 2016 are statistically significant (p<.0.5), therefore have an effect on the outcome. 
+
+
+##Feature Impact Analysis 
+
+###Confidence intervals for significant coefficients 
+```{r}
+confint(x3pa.over.time.final.lm)
+```
+
+###Quantify and interpret the impact of each feature on the target 
+A summary of the model will help us do that. 
+```{r}
+summary(x3pa.over.time.final.lm)
+```
+
+**Discussion**
+
+The final regression model explained approximately $R^2$ = 0.7549 (adjusted $R^2$ = 0.7441) of the variance in average 3-point shot attempts per game. 10-fold cross-validation produced RMSE = 3.3.\
+The final regression model identified season, 2-point percentage, 3-point percentage, and opponent’s average number of defensive rebounds per game as significant factors associated with the average 3-point attempts per game. Over time while holding other variables constant, the number of 3-point attempts increased, with the most recent completed season having an estimated increase of 6.5 3-point attempts compared to 2014 (p = 2.77e-05, 95% CI [3.51, 9.56]). The number of defensive rebounds by the opponent also has a significant effect on the average number of 3-point shot attempts - as the number of defensive rebounds increases by 1, the number of 3-point attempts increases by 1.18 compared to 2014, all other features held constant (p = 1.68e-15, 95% CI [0.90, 1.45]). Not surprisingly, the average percentage of successful 3-point shots also has a significant effect on the number of average 3-point shot attempts per game - a 1 unit, or 1 percentage point, increase in the percentage of successful 3-point shots is associated with an estimated 29.77 more 3-point shot attempts per game (p = 0.016, 95% CI [5.56, 53.97]). When the 2-point success rate increased by 1 percentage point, the number of 3-point attempts increased by 0.94, assuming all other predictors held constant (p < 2e-16, 95% CI [73.80, 114.22]). 
+These findings suggest that the average number of 3-point shots attempted per game has been increasing in the NBA over the last ten years, given that the 2023-2024 season saw an estimated 6.5 more 3-point attempts per game than in 2014. The positive association between the success rate of 3-point shots and the average number of attempts indicates that a team might feel more confident in shooting 3-pointers if they’ve been successful. The positive association between an opponent’s average number of  defensive rebounds and a team’s average 3-point attempts might suggest that when an opposing team limits second-chance opportunities, teams may shift to taking longer-range shots earlier or taking more 3-point shots to compensate for the missed rebound opportunities.\
+Holding all other variables constant, a 1 percentage point increase in a team’s 2-point field goal percentage (a proportion of shots made vs. shots taken) is associated with an estimated 0.94 additional 3-point attempts per game, which could suggest that teams with higher efficiency in 2-point shooting may also be more likely to attempt 3-point shots, which are longer-range. This would reflect positively on a team’s offensive capability.  
+This analysis has several limitations. These few variables selected are certainly not indicative of the whole picture. Though this analysis is able to interpret changes in different league statistics over time, it is unable to capture factors like coaching strategies, issues with players (like injury or trades), or rule changes and attitude shifts. Two variables were dropped to improve the model’s predictive capabilities but may have been meaningful. 
+
+**Conclusion**
+
+	In summary, this regression model was able to examine the change in the average number of 3-point attempts in the NBA over time and a subset of factors that may have influenced the change. The final model explained approximately 74% of the variance, but any analysis gleaned from this is not causal. To expand on this analysis, future modeling could include player-level data to see the effect of individual players on 3-point shooting or in-game data, like game pace or score margin to understand situations where players attempt more 3-point shots. 
