@@ -1,0 +1,9 @@
+readr==2.1.5
+dplyr==2.5.0
+ggplot2==3.5.1
+gridExtra==2.3
+car==3.1-3
+glmnet==4.1-8
+boot==1.3-28.1
+lme4==1.1-35.1
+rmarkdown==2.28
